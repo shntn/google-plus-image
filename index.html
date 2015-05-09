@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"> 
+  <title>ぐぐたすの画像をまとめて表示</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js" ></script>
+  <style>
+    * {
+      margin: 0px;
+      padding: 0px;
+    }
+    body {
+      margin: 5px;
+    }
+    img {
+      margin: 0 !important;
+      padding: 0 !important;
+      padding-right: 5px !important;
+      padding-bottom: 5px !important;
+      width: auto !important;
+      height: auto !important;
+      max-height: 150px !important;
+    }
+    #group {
+      margin-right: 1em;
+    }
+    .select {
+      margin-bottom: 1em;
+    }
+    #status {
+      margin-left: 1em;
+    }
+  </style>
+</head>
+<body>
+<div class='select'>
+<select name='group' id='group'>
+  <option value='x'>グループを選択</option>
+</select>
+<select name='member' id='member' disabled>
+  <option value='x'>メンバーを選択</option>
+</select>
+<span id="status"></span>
+</div>
+<div class='imglist'>
+<h1>このページは何？</h1>
+<p>
+google plusからAKBグループに所属するメンバーの投稿した画像を一覧表示します。
+</p>
+<h1>画像をローカルに保存したい</h1>
+<h3>1枚ずつ保存</h3>
+<p>
+画像を右クリックして「名前を付けて画像を保存」を選ぶとフルサイズの画像が保存されます。
+</p>
+<h3>まとめて保存</h3>
+<p>
+メニューから「名前を付けて保存」を選ぶとフルサイズの画像が保存されます。
+</p>
+<h1>アクセス過多の場合</h1>
+<p>
+このサイトはgoogle apiを使用しており、1日のAPI使用可能数がきまっています。<br>
+画像が表示されない場合は翌日にアクセスしてください。
+</p>
+<h1>対応メンバーについて</h1>
+<p>
+2015.5.10 時点で<a href='https://www.google.com/intl/ja/+/project48/' target='_blank'>Google+ AKB48</a>に登録されているメンバーが対象です。
+</p>
+</div>
+<script type="text/javascript">
+var loop;
+var max = 10000;
+var limit = false; // or 'SKE48' などのグループ名
+var apikey = 'YOUR API KEY';  // google plus API KEY
+var url1 = 'https://www.googleapis.com/plus/v1/people/';
+var url2 = '/activities/public';
+var param = {
+  type: 'GET',
+  url: url1 + userid + url2,
+  data: {
+    maxResults: 100,
+    pageToken: '',
+    key: apikey
+  },
+  cache: false,
+  success: results,
+  error: function(xmlhttpreq, stat, err) {
+    status('画像の取得に失敗しました');
+    this;
+  }
+};
+
+function getimage(uid)
+{
+  loop = 0;
+  param.url = url1 + uid + url2;
+  $.ajax(param);
+}
+
+function results(msg)
+{
+  for (var i = 0; i < msg.items.length; i++) {
+    if (msg.items[i].object.attachments != undefined ) {
+      for (var j = 0; j < msg.items[i].object.attachments.length; j++) {
+        if (msg.items[i].object.attachments[j].objectType === 'photo') {
+          var imgurl = msg.items[i].object.attachments[j].fullImage.url;
+          $('.imglist').append('<img src="' + imgurl + '">');
+        } else if (msg.items[i].object.attachments[j].objectType == 'album') {
+          for (var k = 0; k < msg.items[i].object.attachments[j].thumbnails.length; k++) {
+            var imgurl = msg.items[i].object.attachments[j].thumbnails[k].image.url; 
+            if (imgurl.length > 0) {
+              imgurl = imgurl.replace(/[^\/]+\/[^\/]+$/, 's0/');
+              $('.imglist').append('<img src="' + imgurl + '">');
+            } else {
+              console.log('albumの画像urlが取得できない', msg.items[i].object.attachments[j].thumbnails[k]);
+            }
+          }
+        } else if (msg.items[i].object.attachments[j].objectType == 'video') {
+          var imgurl = msg.items[i].object.attachments[j].image.url;
+          var videourl = msg.items[i].object.attachments[j].url;
+          $('.imglist').append('<a href="' + videourl + '" target="_blank"><img src="' + imgurl + '"></a>');
+        } else {
+          console.log('result', msg.items[i].object.attachments[j].objectType);
+        }
+      }
+    }
+  }
+  loop = loop + 1;
+  if (msg.nextPageToken != undefined) {
+    if (loop <= max) {
+      param.data.pageToken = msg.nextPageToken;
+      $.ajax(param);
+      console.log('results',loop);
+      status('画像取得中…… ' + loop);
+    } else {
+      status('画像が多いため、中断しました');
+    }
+  } else {
+    status('完了');
+    console.log('results', 'end');
+  }
+}
+
+// メンバー選択処理
+
+var group = {};
+var member = {};
+
+function selectgroup(json)
+{
+  for (i = 0; i < json.length; i++) {
+    for (j = 0; j < json[i].group.length; j++) {
+      if (group.hasOwnProperty(json[i].group[j]) == false) {
+        group[json[i].group[j]] = true;
+        member[json[i].group[j]] = [];
+      }
+      member[json[i].group[j]].push(json[i]);
+    }
+  }
+  for (g in group) {
+    if (limit != false) {
+      if (limit != g) {
+        $('#group').append('<option value="' + g + '" disabled>' + g + '</option>');
+      } else {
+        $('#group').append('<option value="' + g + '">' + g + '</option>');
+      }
+    } else {
+      $('#group').append('<option value="' + g + '">' + g + '</option>');
+    }
+  }
+  $('#group').change(selectmember);
+}
+
+function selectmember()
+{
+  var grp = $('[name=group]').val();
+
+  if (group.hasOwnProperty(grp) == true) {
+    $('#member').removeAttr('disabled');
+    $('#member').html('<option value="x">グループを選択</option>');
+    for (i = 0; i < member[grp].length; i++) {
+      $('#member').append('<option value="' + member[grp][i].userid + '">' + member[grp][i].name + '</option>');
+    }
+    $('#member').change(getuid);
+  } else {
+    $('#member').attr('disabled','disabled');
+    $('#member').val(0);
+    $('.imglist').empty();
+    status('');
+  }
+}
+
+function getuid()
+{
+  var uid = $('[name=member]').val();
+  $('.imglist').empty();
+  status('');
+  if (uid != 'x') {
+    getimage(uid);
+    status('画像取得中……');
+  } 
+}
+
+function status(msg)
+{
+  $('#status').html(msg);
+}
+
+jQuery.event.add(window, "load", function(){
+  $.getJSON('akbgroup.json', selectgroup);
+});
+</script>
+</body>
+</html>
